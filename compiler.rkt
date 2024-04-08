@@ -1,7 +1,7 @@
 ;Version 3 - Type checking
 ;---------------------------------------------------------------------------------------------------------------------------------------------------
 ; QUESTIONS / PROBLEMES
-; 1. In the grammar in class we said : PROG ::= '{' *  statement '}' 
+; 1. In the grammar in class we said : PROG ::= '{' *  statement '}'  il faut réécrire la grammaire correctement
 ; * type_decls 
 ; but here we never recognize '{', so how do we do ?
 ; 2. L42 -> regex doesn't work because of ||
@@ -17,7 +17,9 @@
 (define-empty-tokens punct-tokens (L-PAREN R-PAREN EOF))
 (define-empty-tokens operator-tokens (PLUS MINUS MULT DIV))
 
-;---------------------------------------------------------------------------------------------------------------------------------------------------
+;(define SYMBOLS '(DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, L-BRACKET, R-BRACKET, L-PARANTHESIS, R-PARENTHESIS, PLUS, MINUS, LESS, SEMI, EQUAL, INT, ID, EOI))
+;-------------------------------------------------------
+
 ; LEXEUR 
 (define (unfold-positions positioned-lexeme)
   (match positioned-lexeme
@@ -28,16 +30,18 @@
 
 ; -------------------------------------------------------------------------------------------------------------------------------------------------
 ; GRAMMAIRE 
+; define c-lang-lexer
 (define ETF-lexer
   (lexer-src-pos
    [(eof) (token-EOF)]
-   ["("      (token-L-PAREN)]
+   ["("      (token-L-PAREN)] ; ajouter ce qu'il manque
    [")"      (token-R-PAREN)]
    ["+"      (token-PLUS)]
    ["-"      (token-MINUS)]
    ["*"      (token-MULT)]
    ["/"      (token-DIV)]
    ;[(#px"/^([1-9][0-9]*#|0)(#.[0-9]{2})?$/")(token-FLOAT (string->number lexeme))]
+   ;[(: numeric) "." (: numeric) (token-FLOAT (string->number lexeme))] ;ça ressemble à un truc comme ça
    [(:+ numeric) (let ([number (string->number lexeme)])
                    (cond
                      [(integer? number)
@@ -49,7 +53,7 @@
    [whitespace (ETF-lexer input-port)]))
    
 
-
+; refaire la grammaire
 ;------------------------------------------------------------------------------------------------------------------------------------------------------------
 ; PARSEUR 
 (define (parse parsing-fun input-str)
