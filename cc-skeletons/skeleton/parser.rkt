@@ -19,36 +19,54 @@
    [tokens basic-tokens punct-tokens operator-tokens keyword-tokens]
    (src-pos)
    [grammar
-    [program    [(statement) (node 'PROG $1 'nil 'nil 'nil)]]
-    [statement  [(IF paren-expr statement) (node 'IF1 $2 $3 'nil 'nil)]
-                [(IF paren-expr statement) (node 'IF2 $2 $3 'nil 'nil)]
-                
-                [(IF paren-expr statement ELSE statement) (node 'IF2 $2 $3 $5 'nil)]
-                [(WHILE paren-expr statement) (node 'WHILE $2 $3 'nil 'nil)]
-                [(DO statement WHILE paren-expr SEMI) (node 'DO $2 $4 'nil 'nil)]
-                [(LBRACE statement RBRACE) $2]
-                [(expr SEMI) $1]
+    [program [(sequence) (node 'PROG $1 'nil 'nil 'nil)]] ; <program> ::= <sequence>
 
+    [sequence [(statement) (node 'SEQ $1 'nil 'nil 'nil)] ; <sequence> ::= <statement>
+              [(statement sequence) (node 'SEQ $1 $2 'nil 'nil)]] ; <sequence> ::= <statement> <sequence>
 
-<program> ::= <statement>
-<statement> ::= "if" <paren_expr> <statement> |
-                "if" <paren_expr> <statement> "else" <statement> |
-                "while" <paren_expr> <statement> |
-                "do" <statement> "while" <paren_expr> ";" |
-                "{" { <statement> } "}" |
-                <expr> ";" |
-                ";"
-<paren_expr> ::= "(" <expr> ")"
-<expr> ::= <test> | <id> "=" <expr>
-<test> ::= <sum> | <sum> "<" <sum>
-<sum> ::= <term> | <sum> "+" <term> | <sum> "-" <term>
-<term> ::= <id> | <int> | <paren_expr>
-<id> ::= "a" | "b" | "c" | "d" | ... | "z"
-<int> ::= <an_unsigned_decimal_integer>
-    ;; TODO: parsing productions are missing here!
-    [term       [(ID) (node 'VAR 'nil 'nil 'nil $1)]
-                [(paren-expr) $1]]]))
+    [statement [(IF paren-expr-if1 statement ELSE statement)(node 'IF1 $2 $3 $5 'nil)]  ; "if" paren-expr-if1 <statement> "else" <statement>
+               [(IF paren-expr-if1 statement)(node 'IF1 $2 $3 'nil 'nil)] ; "if" paren-expr-if1 <statement>
+               [(IF paren-expr-if2 statement ELSE statement)(node 'IF2 $2 $3 $5 'nil)] ; "if" paren-expr-if2 <statement> "else" <statement>
+               [(IF paren-expr-if2 statement)(node 'IF2 $2 $3 'nil 'nil)] ; "if" paren-expr-if2 <statement>
+               [(WHILE paren-expr statement) ; "while" <paren_expr> <statement>
+                (node 'WHILE $2 $3 'nil 'nil)]
+               [(DO statement WHILE paren-expr SEMI) ; "do" <statement> "while" <paren_expr> ";"
+                (node 'DO $2 $4 'nil 'nil)]
+               [(L-BRACKET sequence R-BRACKET) $2] ; return the sequence inside the braces
+               [(expr SEMI) (node 'EXPR $1 'nil 'nil 'nil)] ; <expr> ";"
+               [(SEMI) (node 'EMPTY 'nil 'nil 'nil 'nil)]] ; ";"
 
+    [paren-expr-if1 [(L-PAREN id LESS int R-PAREN) (node 'LT (node 'VAR 'nil 'nil 'nil $2) (node 'CST 'nil 'nil 'nil $4) 'nil 'nil)]]; IF1: Comparaison entre VAR et CST
+
+    [paren-expr-if2 [(L-PAREN id LESS id R-PAREN) (node 'LT (node 'VAR 'nil 'nil 'nil $2) (node 'VAR 'nil 'nil 'nil $4) 'nil 'nil)]] ; IF2: Comparaison entre VAR et VAR
+
+    [paren-expr [(L-PAREN expr R-PAREN) $2]] ; <paren_expr> ::= "(" <expr> ")"
+
+    [expr [(test) $1] ; <expr> ::= <test>
+          [(term EQUAL expr) ; <id> "=" <expr>
+           (node 'SET $1 $3 'nil 'nil)]]
+
+    [test [(sum) $1] ; <test> ::= <sum>
+          [(sum LESS sum) ; <sum> "<" <sum>
+           (node 'LT $1 $3 'nil 'nil)]]
+
+    [sum [(term) $1] ; <sum> ::= <term>
+         [(sum PLUS term) ; <sum> "+" <term>
+          (node 'ADD $1 $3 'nil 'nil)]
+         [(sum MINUS term) ; <sum> "-" <term>
+          (node 'SUB $1 $3 'nil 'nil)]]
+
+    [term [(id) (node 'VAR 'nil 'nil 'nil $1)] ; <term> ::= <id>
+          [(int) (node 'CST 'nil 'nil 'nil $1)] ; <term> ::= <int>
+          [(paren-expr) $1]] ; <term> ::= <paren_expr>
+
+    [id [(ID) $1]] ; <id> ::= identifiant (par exemple "a", "b", "c" ou autre identifiant)
+
+    [int [(INT) $1]] ; <int> ::= nombre entier
+  ]))
+ ; <int> ::= <an_unsigned_decimal_integer>
+    
+                  
 (define (syntactical-analysis prg)
   (c-lang-parser (lexical-analysis prg)))
 
@@ -81,11 +99,16 @@
                  (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "x") (node 'CST 'nil 'nil 'nil 1) 'nil 'nil) 'nil 'nil 'nil)
                  'nil
                  'nil)
-                (node
-                 'IF1
-                 (node 'LT (node 'VAR 'nil 'nil 'nil "i") (node 'CST 'nil 'nil 'nil 10) 'nil 'nil)
-                 (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "y") (node 'CST 'nil 'nil 'nil 2) 'nil 'nil) 'nil 'nil 'nil)
-                 'nil
+                (node 
+                 'SEQ 
+                 (node 
+                  'IF1 
+                   (node 'LT (node 'VAR 'nil 'nil 'nil "i") (node 'CST 'nil 'nil 'nil 10) 'nil 'nil)
+                   (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "y") (node 'CST 'nil 'nil 'nil 2) 'nil 'nil) 'nil 'nil 'nil)
+                   'nil
+                   'nil)
+                 'nil 
+                 'nil 
                  'nil)
                 'nil
                 'nil)
@@ -105,15 +128,20 @@
                'SEQ
                (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "i") (node 'CST 'nil 'nil 'nil 1) 'nil 'nil) 'nil 'nil 'nil)
                (node
-                'WHILE
-                (node 'LT (node 'VAR 'nil 'nil 'nil "i") (node 'CST 'nil 'nil 'nil 100) 'nil 'nil)
+                'SEQ 
                 (node
-                 'EXPR
-                 (node 'SET (node 'VAR 'nil 'nil 'nil "i") (node 'ADD (node 'VAR 'nil 'nil 'nil "i") (node 'VAR 'nil 'nil 'nil "i") 'nil 'nil) 'nil 'nil)
-                 'nil
-                 'nil
-                 'nil)
-                'nil
+                  'WHILE
+                  (node 'LT (node 'VAR 'nil 'nil 'nil "i") (node 'CST 'nil 'nil 'nil 100) 'nil 'nil)
+                  (node
+                   'EXPR
+                   (node 'SET (node 'VAR 'nil 'nil 'nil "i") (node 'ADD (node 'VAR 'nil 'nil 'nil "i") (node 'VAR 'nil 'nil 'nil "i") 'nil 'nil) 'nil 'nil)
+                   'nil
+                   'nil
+                   'nil)
+                  'nil
+                  'nil) 
+                'nil 
+                'nil 
                 'nil)
                'nil
                'nil)
@@ -133,7 +161,7 @@
                (node
                 'SEQ
                 (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "j") (node 'CST 'nil 'nil 'nil 100) 'nil 'nil) 'nil 'nil 'nil)
-                (node
+                (node 'SEQ (node
                  'WHILE
                  (node 'SUB (node 'VAR 'nil 'nil 'nil "i") (node 'VAR 'nil 'nil 'nil "j") 'nil 'nil)
                  (node
@@ -153,7 +181,7 @@
                    'nil)
                   'nil)
                  'nil
-                 'nil)
+                 'nil)'nil 'nil 'nil)
                 'nil
                 'nil)
                'nil
@@ -171,6 +199,8 @@
               (node
                'SEQ
                (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "i") (node 'CST 'nil 'nil 'nil 1) 'nil 'nil) 'nil 'nil 'nil)
+               (node
+               'SEQ
                (node
                 'DO
                 (node
@@ -183,6 +213,9 @@
                 'nil
                 'nil)
                'nil
+               'nil
+               'nil)
+               'nil
                'nil)
               'nil
               'nil
@@ -197,6 +230,8 @@
               (node
                'SEQ
                (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "i") (node 'CST 'nil 'nil 'nil 1) 'nil 'nil) 'nil 'nil 'nil)
+               (node 
+               'SEQ
                (node
                 'WHILE
                 (node
@@ -208,6 +243,9 @@
                 (node 'EMPTY 'nil 'nil 'nil 'nil)
                 'nil
                 'nil)
+               'nil
+               'nil
+               'nil)
                'nil
                'nil)
               'nil
@@ -224,6 +262,8 @@
                'SEQ
                (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "ixl") (node 'CST 'nil 'nil 'nil 1) 'nil 'nil) 'nil 'nil 'nil)
                (node
+               'SEQ
+               (node
                 'WHILE
                 (node
                  'LT
@@ -234,6 +274,9 @@
                 (node 'EMPTY 'nil 'nil 'nil 'nil)
                 'nil
                 'nil)
+               'nil
+               'nil
+               'nil)
                'nil
                'nil)
               'nil
@@ -252,6 +295,8 @@
                (node
                 'SEQ
                 (node 'EXPR (node 'SET (node 'VAR 'nil 'nil 'nil "bongo") (node 'CST 'nil 'nil 'nil 100) 'nil 'nil) 'nil 'nil 'nil)
+                (node
+                'SEQ
                 (node
                  'WHILE
                  (node 'SUB (node 'VAR 'nil 'nil 'nil "bingo") (node 'VAR 'nil 'nil 'nil "bongo") 'nil 'nil)
@@ -283,6 +328,9 @@
                   'nil)
                  'nil
                  'nil)
+                'nil
+                'nil
+                'nil)
                 'nil
                 'nil)
                'nil
