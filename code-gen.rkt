@@ -34,13 +34,22 @@
 
 (define (find-idents AST)
   (match AST
-    ;; TODO leaf node statements need to go here!
+    ;; Cas pour les nœuds feuille contenant des identifiants
+    [(node 'VAR 'nil 'nil 'nil ident)
+     (list ident)] ; Renvoie la variable identifiée comme liste
+    [(node 'CST 'nil 'nil 'nil _)
+     empty] ; Constante n'a pas besoin d'être ajoutée
+    ;; Cas pour les autres types de nœuds
     [(node type o1 o2 o3 v)
      (append (find-idents o1) (find-idents o2) (find-idents o3))]
-    [(? empty?)  empty]
-    [(? string?) empty]
-    ['nil        empty]
+    [(? empty?)
+     empty]
+    [(? string?)
+     empty]
+    ['nil
+     empty]
     [_ (error 'find-idents "no matching rule for ~a" AST)]))
+
 
 (module+ test
   (require rackunit)
@@ -79,8 +88,17 @@
         (error 'map-identifier "identifier not found in environment id:= ~a | end:= ~a" ident env)
         (cdr num))))
 
-(define (create-env AST [counter (make-counter)]))
-  ;; TODO: complete implementation here!
+(define (create-env AST [counter (make-counter)])
+  (let ([idents (find-idents AST)])
+    (define (assign-id ident env)
+      (let ([result
+             (if (not (assoc ident env))
+                 (append env `((,ident . ,(counter))))
+                 env)])
+        result))
+    (foldl assign-id empty idents)))
+
+
 
 
 (module+ test
@@ -147,7 +165,11 @@
         empty])]))
 
 
-(define (remove-target-labels list-of-instrs))
+(define (remove-target-labels list-of-instrs)
+  (filter (lambda (instr)
+            (not (and (list? instr) (eq? (first instr) 'target))))
+          list-of-instrs))
+
 
 
 (define (compute-offsets list-of-instrs)
@@ -172,8 +194,39 @@
     (map-identifier ident-str env))
 
   (match AST
-    [(node 'PROG prog-entry-code o2 o3 v) `(,@(recurse prog-entry-code) 'HALT)]
-    ;; TODO code generation rules are missing!
+    [(node 'PROG prog-entry-code o2 o3 v) `(,@(recurse prog-entry-code) 'HALT)] ;program
+
+    [(node 'SEQ o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2))] ;sequence
+
+    ; statement
+    [(node 'IF1 cond then else 'nil) `(,@(recurse cond) (JZ) 0 ,@(recurse else) (JMP) 0 ,@(recurse then))] ;if1 then else
+    [(node 'IF2 cond then else 'nil) `(,@(recurse cond) (JZ) 0 ,@(recurse else) (JMP) 0 ,@(recurse then))] ;if2 then else
+
+    [(node 'IF1 cond then 'nil 'nil) `(,@(recurse cond) (JZ) 0 ,@(recurse then))] ;if1 then
+    [(node 'IF2 cond then 'nil 'nil) `(,@(recurse cond) (JZ) 0 ,@(recurse then))] ;if2 then
+
+    [(node 'WHILE cond body 'nil 'nil) `(,@(recurse cond) (JZ) 0 ,@(recurse body) (JMP) 0 ,@(recurse AST))] ;while
+    [(node 'DO body cond 'nil 'nil) `(,@(recurse body) ,@(recurse cond) (JNZ) 0 ,@(recurse AST))] ;do
+
+    
+    [(node 'EXPR expr 'nil 'nil 'nil) `(,@(recurse expr))]
+    [(node 'EMPTY 'nil 'nil 'nil 'nil) empty]
+
+    ; expr
+    [(node 'SET id expr 'nil 'nil) `(,@(recurse expr) (ISTORE) ,@(encode-operand id) (IPOP))]
+    
+    ;test
+    [(node 'LT o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) (ILT))]
+
+    ;sum
+    [(node 'ADD o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) (IADD))]
+    [(node 'SUB o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) (ISUB))]
+
+    ;term
+    [(node 'VAR 'nil 'nil 'nil v) `((IFETCH) ,@(encode-operand v))]
+    [(node 'CST 'nil 'nil 'nil v) `((IPUSH) ,v)]
+    
+   
     [(? empty?)                     empty]
     ['nil                           empty]
     [_                              (error "no matching instruction for node: ~a" AST)]))

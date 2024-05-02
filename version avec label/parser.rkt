@@ -19,19 +19,11 @@
    [tokens basic-tokens punct-tokens operator-tokens keyword-tokens]
    (src-pos)
    [grammar
-    [program [( declarations sequence) (node 'PROG $1 $2 'nil 'nil)]] ; <program> ::= <declarations sequence>
-
-    [declarations [(declaration declarations)(node 'DECLS $1 $2 'nil 'nil)] ; <declarations> ::= <declaration>
-                  [(SEMI) (node 'EMPTY 'nil 'nil 'nil 'nil)]] ;  <declarations> ::= ";"
-
-    [declaration [(BYTE id SEMI)(node 'DECL $1 'nil 'nil 'nil)]  ; <declaration ::= < byte id ";">
-                 [(SHORT id SEMI)(node 'DECL $1 'nil 'nil 'nil)] ; <declaration ::= < short id ";">
-                 [(FLOAT id SEMI)(node 'DECL $1 'nil 'nil 'nil)] ; <declaration ::= < float id ";">
-                 [(INT id SEMI)(node 'DECL $1 'nil 'nil 'nil)]]   ; <declaration ::= < int id ";">
+    [program [(sequence) (node 'PROG $1 'nil 'nil 'nil)]] ; <program> ::= <sequence>
 
     [sequence [(statement) (node 'SEQ $1 'nil 'nil 'nil)] ; <sequence> ::= <statement>
               [(statement sequence) (node 'SEQ $1 $2 'nil 'nil)]] ; <sequence> ::= <statement> <sequence>
-    
+
     [statement [(IF paren-expr-if1 statement ELSE statement)(node 'IF1 $2 $3 $5 'nil)]  ; "if" paren-expr-if1 <statement> "else" <statement>
                [(IF paren-expr-if1 statement)(node 'IF1 $2 $3 'nil 'nil)] ; "if" paren-expr-if1 <statement>
                [(IF paren-expr-if2 statement ELSE statement)(node 'IF2 $2 $3 $5 'nil)] ; "if" paren-expr-if2 <statement> "else" <statement>
@@ -72,6 +64,7 @@
 
     [int [(INT) $1]] ; <int> ::= nombre entier
   ]))
+ ; <int> ::= <an_unsigned_decimal_integer>
     
                   
 (define (syntactical-analysis prg)
