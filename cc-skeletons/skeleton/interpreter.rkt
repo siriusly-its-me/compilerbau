@@ -49,6 +49,10 @@
               ;;       modified state.
               ['IPOP
                (loop (add1 pc) (cdr stack) mem)])))))
+              
+
+
+              
 
 
 (define (!=0 x)
