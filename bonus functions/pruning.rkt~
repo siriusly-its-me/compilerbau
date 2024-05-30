@@ -14,15 +14,9 @@
             [val (node-val tree)])
         
         ; Si le nœud est de type 'SEQ' et n'a pas de fils droit (o2)
-        (if (and (equal? kind 'SEQ) (equal? o2 'nil))
+        (if (and (equal? kind 'SEQ) (or (null? o2) (equal? o2 'nil)))
             ; Remonter le fils gauche (o1) pour remplacer le nœud 'SEQ'
-            (if (equal? o1 'EQ)
-                (node kind
-                  (prune-seq-nodes o1)
-                  (prune-seq-nodes o2)
-                  (prune-seq-nodes o3)
-                  val)
-                (prune-seq-nodes o1))
+            (prune-seq-nodes o1)
             ; Sinon, traiter les enfants récursivement
             (node kind
                   (prune-seq-nodes o1)
@@ -34,7 +28,7 @@
 
 ; Exemple d'arbre syntaxique
 (define syntax-tree
-     (node
+(node
    'PROG
    (node
     'SEQ

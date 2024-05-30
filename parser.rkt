@@ -26,21 +26,13 @@
               ; empty rule ; <sequence> ::= <statement> <sequence>
 
 
-    [statement [(IF paren-expr-if1 statement ELSE statement)(node 'IF1 $2 $3 $5 'nil)]  ; "if" paren-expr-if1 <statement> "else" <statement>
-               [(IF paren-expr-if1 statement)(node 'IF1 $2 $3 'nil 'nil)] ; "if" paren-expr-if1 <statement>
-               [(IF paren-expr-if2 statement ELSE statement)(node 'IF2 $2 $3 $5 'nil)] ; "if" paren-expr-if2 <statement> "else" <statement>
-               [(IF paren-expr-if2 statement)(node 'IF2 $2 $3 'nil 'nil)] ; "if" paren-expr-if2 <statement>
-               [(WHILE paren-expr statement) ; "while" <paren_expr> <statement>
-                (node 'WHILE $2 $3 'nil 'nil)]
-               [(DO statement WHILE paren-expr SEMI) ; "do" <statement> "while" <paren_expr> ";"
-                (node 'DO $2 $4 'nil 'nil)]
+    [statement [(IF paren-expr statement ELSE statement)(node 'IF2 $2 $3 $5 'nil)]  ; "if" paren-expr-if1 <statement> "else" <statement>
+               [(IF paren-expr statement)(node 'IF1 $2 $3 'nil 'nil)] ; "if" paren-expr-if1 <statement>
+               [(WHILE paren-expr statement)(node 'WHILE $2 $3 'nil 'nil)]; "while" <paren_expr> <statement>
+               [(DO statement WHILE paren-expr SEMI)(node 'DO $2 $4 'nil 'nil)] ; "do" <statement> "while" <paren_expr> ";"
                [(L-BRACKET sequence R-BRACKET) $2] ; return the sequence inside the braces
                [(expr SEMI) (node 'EXPR $1 'nil 'nil 'nil)] ; <expr> ";"
                [(SEMI) (node 'EMPTY 'nil 'nil 'nil 'nil)]] ; ";"
-
-    [paren-expr-if1 [(L-PAREN id LESS int R-PAREN) (node 'LT (node 'VAR 'nil 'nil 'nil $2) (node 'CST 'nil 'nil 'nil $4) 'nil 'nil)]]; IF1: Comparaison entre VAR et CST
-
-    [paren-expr-if2 [(L-PAREN id LESS id R-PAREN) (node 'LT (node 'VAR 'nil 'nil 'nil $2) (node 'VAR 'nil 'nil 'nil $4) 'nil 'nil)]] ; IF2: Comparaison entre VAR et VAR
 
     [paren-expr [(L-PAREN expr R-PAREN) $2]] ; <paren_expr> ::= "(" <expr> ")"
 
