@@ -33,6 +33,7 @@
 ;; ############################## AST analyses & transformations ##############################
 
 (define (find-idents AST)
+  (printf "Processing AST node: ~a\n" AST)
   (match AST
     ;; Cas pour les nœuds feuille contenant des identifiants
     [(node 'VAR 'nil 'nil 'nil ident)
@@ -49,6 +50,7 @@
     ['nil
      empty]
     [_ (error 'find-idents "no matching rule for ~a" AST)]))
+
 
 
 (module+ test
