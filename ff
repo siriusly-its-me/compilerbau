@@ -1,6 +1,70 @@
 #lang racket
+(require racket/base)
 
-(require "lexer.rkt")
+(require
+ parser-tools/lex
+ (prefix-in : parser-tools/lex-sre))
+
+(require rackunit)
+
+
+(provide lexical-analysis
+         basic-tokens punct-tokens operator-tokens keyword-tokens)
+
+;; ######################################## LEXER ########################################
+
+(define-tokens basic-tokens (INT FLOAT ID))
+(define-empty-tokens punct-tokens (L-PAREN R-PAREN L-BRACKET R-BRACKET SEMI COMMA EOF))
+(define-empty-tokens operator-tokens (PLUS MINUS LESS EQUAL))
+(define-empty-tokens keyword-tokens (WHILE DO IF ELSE RETURN))
+
+
+(define c-lang-lexer
+  (lexer-src-pos
+    [(eof) (token-EOF)]
+    ["("      (token-L-PAREN)]
+    [")"      (token-R-PAREN)]
+    ["{"      (token-L-BRACKET)]
+    ["}"      (token-R-BRACKET)]
+    [";"      (token-SEMI)]
+    [","      (token-COMMA)]
+    ["+"      (token-PLUS)]
+    ["-"      (token-MINUS)]
+    ["<"      (token-LESS)]
+    ["="      (token-EQUAL)]
+    ["while"  (token-WHILE)]
+    ["do"     (token-DO)]
+    ["if"     (token-IF)]
+    ["else"   (token-ELSE)]
+    ["return" (token-RETURN)]
+    [(:+ numeric) (token-INT (string->number lexeme))]
+    [(:+ alphabetic) (token-ID lexeme)]
+    [(::(:+ numeric)#\.(:+ numeric)) (token-FLOAT (string->number lexeme))]
+    [whitespace (c-lang-lexer input-port)]))
+
+(define (lexical-analysis prg)
+  (let ([*in* (open-input-string prg)])
+    (port-count-lines! *in*)
+    (λ () (unfold-positions (c-lang-lexer *in*)))))
+
+(define (unfold-positions positioned-lexeme)
+  (match positioned-lexeme
+    [(position-token (position-token T S E) start1 end1)
+     (unfold-positions (make-position-token T S E))]
+    [else
+     positioned-lexeme]))
+
+(define (consume lexer)
+  (let ([token (lexer)])
+    (match token
+      [(position-token 'EOF position-a position-b)
+       empty]
+      [(position-token token-symbol position-a position-b)
+
+       (cons (if (symbol? token-symbol)
+                 token-symbol
+                 (cons (token-name token-symbol) (token-value token-symbol)))
+             (consume lexer))])))
 (require parser-tools/yacc)
 
 (provide syntactical-analysis (struct-out node))

@@ -76,7 +76,8 @@
  (define e6 "{ ixl=1; while ((ixl=ixl+10)<50) ; }")
  (define e7 "{ bingo=125; bongo=100; while (bingo-bongo) if (bingo<bongo) bongo=bongo-bingo; else bingo=bingo-bongo; }")
  (define e8 "{ bingo = 3.14 ;}")
- (define programs (list e1 e2 e3 e4 e5 e6 e7 e8))
+ (define e9 "{ int addititon(int a, int b) { return a+b; } }")
+ (define programs (list e1 e2 e3 e4 e5 e6 e7 e8 e9))
 
  (define token-streams
    '((L-BRACKET
@@ -256,6 +257,24 @@
       EQUAL
       (FLOAT . 3.14)
       SEMI
+      R-BRACKET)
+      (L-BRACKET
+      (ID . "int")
+      (ID . "addititon")
+      L-PAREN
+      (ID . "int")
+      (ID . "a")
+      COMMA
+      (ID . "int")
+      (ID . "b")
+      R-PAREN
+      L-BRACKET
+      RETURN
+      (ID . "a")
+      PLUS
+      (ID . "b")
+      SEMI
+      R-BRACKET
       R-BRACKET)))
 
  (define programs-outputs (for/list ([p programs]
