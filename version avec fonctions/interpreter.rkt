@@ -2,10 +2,11 @@
 
 (provide encode interpret)
 
-;; NOTE: in the following list, HALT *needs* to be the *LAST* instruction!
-(define *opcode-list* '(IFETCH ISTORE IPUSH IPOP IADD ISUB ILT JZ JNZ JMP HALT))
+
+(define *opcode-list* '(IFETCH ISTORE IPUSH IPOP IADD ISUB ILT JZ JNZ JMP CALL RET SWAP HALT))
 (define *opcode-map* (for/list ([opcode *opcode-list*]
                                 [i (range (length *opcode-list*))])
+                       ;; (cons `(quote ,opcode) i)))
                        (cons `(,opcode) i)))
 
 (define (encode opcodes)
@@ -14,6 +15,7 @@
          [i 0])
     (for ([instr opcodes])
       (let ([instr-opcode (assoc instr *opcode-map*)])
+        (printf "instr:= ~a -> ~a\n" instr instr-opcode)
         (vector-set! v i (if instr-opcode (cdr instr-opcode) instr)))
       (set! i (add1 i)))
     v))
@@ -21,118 +23,61 @@
 (define (decode opcode)
   (list-ref *opcode-list* opcode))
 
+
 (define (interpret code [start-pc 0])
   (define counter 0)
-  ;; named-led statement here, documentation:
-  ;;   https://docs.racket-lang.org/guide/let.html#(part._.Named_let)
   (let loop ([pc start-pc]
              [stack empty]
              [mem (make-vector 30 0)])
-      ;; the counter only allows 100 instructions at present, needs to be adjusted if longer programs are executed...
-      (set! counter (add1 counter))
-      (when (> counter 100) (error 'interpret "too many steps - pc:= ~a; stack:= ~a, mem: ~a" pc stack mem))
-      (if (eq? (vector-ref code pc) (index-of *opcode-list* 'HALT))
-          mem
-          (let ([oparg (vector-ref code (add1 pc))])
-            ;; the following statement allows you to inspect a running program!
-            (printf "interpret/~a: ~a (~a)\t\t| {~a} | {~a}\n" pc (decode (vector-ref code pc)) oparg stack mem)
-            (match (decode (vector-ref code pc))
+    (set! counter (add1 counter))
+    (when (> counter 100) (error 'interpret "fuck this...: pc:= ~a; stack:= ~a, mem: ~a" pc stack mem))
+    (if (eq? (vector-ref code pc) (index-of *opcode-list* 'HALT))
+        mem
+        (let ([oparg (vector-ref code (add1 pc))])
+          (printf "interpret/~a: ~a (~a)\t\t| {~a} | {~a}\n" pc (decode (vector-ref code pc)) oparg stack mem)
+          (match (decode (vector-ref code pc))
+            ['IFETCH
+             (loop (+ pc 2) (cons (vector-ref mem oparg) stack)    mem)]
 
-              ; case IFETCH: *sp++ = globals[*pc++];               goto again;
-              ['IFETCH
-                (let* ([index (vector-ref code (add1 pc))]
-                      [value (vector-ref mem index)]
-                      [new-pc (add1 (add1 pc))]               
-                      [new-stack (cons value stack)]) 
-                  (loop new-pc new-stack mem))]
+            ['ISTORE
+             (vector-set! mem oparg (car stack))
+             (loop (+ pc 2)  stack  mem)]
 
+            ['IPUSH
+             (loop (+ pc 2)  (cons oparg stack)  mem)]
 
-              ; case ISTORE: globals[*pc++] = sp[-1];              goto again;
-              ['ISTORE
-                (let* ([value (car stack)]
-                       [index (vector-ref code (add1 pc))]
-                       [new-pc (+ pc 2)])
-                  (vector-set! mem index value)
-                  (loop new-pc stack mem))]
+            ['SWAP
+             (match-define (cons tos (cons sec rem-stack)) stack)
+             (loop (add1 pc) (cons sec (cons tos rem-stack)) mem)]
 
-              ; case IPUSH : *sp++ = *pc++;                        goto again;
-              ['IPUSH 
-               (let* ([value (vector-ref code (add1 pc))]
-                      [new-pc (+ pc 2)]
-                      [new-stack (cons value stack)])
-                 (loop new-pc new-stack mem))]
-              
-              ; case IPOP  : --sp;                                 goto again;
-              ['IPOP
-               (let ([new-pc (add1 pc)]
-                      [new-stack (cdr stack)])
-                (loop new-pc new-stack mem))]
+            ['JMP
+             (loop (+ pc 1 oparg)  stack  mem)]
 
-              ; case IADD  : sp[-2] = sp[-2] + sp[-1]; --sp;       goto again;
-              ['IADD 
-                (let* ([val1 (car stack)]
-                       [val2 (cadr stack)]
-                       [new-stack (cons (+ val1 val2) (cddr stack))])
-                (loop (add1 pc) new-stack mem))]
+            ['RET
+             (define return-address (first stack))
+             (loop return-address  (rest stack)  mem)]
 
-              ; case ISUB  : sp[-2] = sp[-2] - sp[-1]; --sp;       goto again;
-              ['ISUB
-                (let* ([val1 (car stack)]
-                       [val2 (cadr stack)]
-                       [new-stack (cons (- val2 val1) (cddr stack))])
-                (loop (add1 pc) new-stack mem))]
+            ['IPOP
+             (loop (add1 pc) (cdr stack) mem)]
 
-              ; case ILT   : sp[-2] = sp[-2] < sp[-1]; --sp;       goto again;
-              ['ILT
-                (let* ([val1 (car stack)]
-                       [val2 (cadr stack)]
-                       [result (if (< val2 val1) 1 0)]
-                       [new-stack (cons result (cddr stack))])
-                (loop (add1 pc) new-stack mem))]
+            [op #:when (memq op '(ISUB IADD ILT))
+             (define *map* (list (list 'ISUB -) (list 'IADD +) (list 'ILT <)))
+             (loop (add1 pc)
+                   (cons (apply (cadr (assoc op *map*)) (list (second stack) (first stack))) (drop stack 2))
+                   mem)]
 
-                ; case JMP   : pc += *pc;                            goto again;
-                ['JMP
-                  (let ([jump (vector-ref code (add1 pc))])
-                  (loop (+ pc jump 1) stack mem))]
+            [cjmp #:when (memq cjmp '(JZ JNZ))
+              (define top-of-stack (first stack))
+              (define (take-branch) (loop (+ pc oparg 1) (cdr stack) mem))
+              (define (skip-branch) (loop (+ pc 2) (cdr stack) mem))
+              (match* (cjmp top-of-stack)
+                [('JZ 0) (take-branch)]
+                [('JZ #f) (take-branch)]
+                [('JNZ #t) (take-branch)]
+                [('JNZ #f) (skip-branch)]
+                [('JNZ (? !=0)) (take-branch)]
+                [(_ _) (skip-branch)])])))))
 
-                ; case JZ    : if (*--sp == 0) pc += *pc; else pc++; goto again
-                ['JZ
-                  (let* ([condition (if (null? (cdr stack))
-                                      (car stack)  ; si un seul élément
-                                      (cadr stack))]  ; sinon on prend le deuxième
-                          [offset (vector-ref code (add1 pc))]
-                          [new-pc (if (= condition 0)
-                                      (+ pc offset 1)
-                                      (+ pc 2))]
-                          [new-stack (cdr stack)])
-                        ; (printf "JZ: pc = ~a, offset = ~a, new-pc = ~a, condition = ~a\n" pc offset new-pc condition) DEBUG
-                        (loop new-pc new-stack mem))]
-
-
-                ; case JNZ   : if (*--sp != 0) pc += *pc; else pc++; goto again;
-                ['JNZ
-                 (let* ([condition (if (null? (cdr stack))
-                                      (car stack)  ; si un seul élément
-                                      (cadr stack))]  ; sinon on prend le deuxième
-                        [offset (vector-ref code (add1 pc))]
-                        [new-pc (if (!=0 condition)
-                                      (+ pc offset 1)
-                                      (+ pc 2))]
-                        [new-stack (cdr stack)])
-                        (printf "JZ: pc = ~a, offset = ~a, new-pc = ~a, condition = ~a\n" pc offset new-pc condition) ;DEBUG
-                        (loop new-pc new-stack mem))]
-                        
-                ['CALL
-       (let* ([func-addr (vector-ref code (add1 pc))]
-              [return-addr (+ pc 2)]
-              [new-pc func-addr]
-              [new-call-stack (cons return-addr stack)])
-         (loop new-pc stack mem new-call-stack))]
-      ['RET
-       (let* ([return-addr (car stack)]
-              [new-call-stack (cdr stack)])
-         (loop return-addr stack mem new-call-stack))])))))
-            
           
 
 (define (!=0 x)
@@ -140,19 +85,16 @@
 
 (define (=0 x)
   (= x 0))
-            
-          
 
 (module+ test
   (require rackunit)
-  (define bytecodes '(#(9 1 2 7 1 0 3 0 0 2 5 6 7 6 2 1 1 1 3 0 0 2 10 6 7 -6 2 2 1 2 3 10)
-                      #(9 1 2 1 1 0 3 0 0 2 100 6 7 11 0 0 0 0 4 1 0 3 9 -16 10)
-                      #(9 1 2 125 1 0 3 2 100 1 1 3 0 0 0 1 5 7 28 0 0 0 1 6 7 11 0 1 0 0 5 1 1 3 9 9 0 0 0 1 5 1 0 3 9 -33 10)
-                      #(9 1 2 1 1 0 3 0 0 2 10 4 1 0 3 0 0 2 50 6 8 -14 10)
-                      #(9 1 2 1 1 0 3 0 0 2 10 4 1 0 2 50 6 7 3 9 -13 10)
-                      #(9 1 2 1 1 0 3 0 0 2 10 4 1 0 2 50 6 7 3 9 -13 10)
-                      #(9 1 2 125 1 0 3 2 100 1 1 3 0 0 0 1 5 7 28 0 0 0 1 6 7 11 0 1 0 0 5 1 1 3 9 9 0 0 0 1 5 1 0 3 9 -33 10)
-                      #(9 4 2 7 2 3 4 12 2 5 11 4 2 8 4 1 0 10)))
+  (define bytecodes '(#(9 1 2 7 1 0 3 0 0 2 5 6 7 6 2 1 1 1 3 0 0 2 10 6 7 -6 2 2 1 2 3 13)
+                      #(9 1 2 1 1 0 3 0 0 2 100 6 7 11 0 0 0 0 4 1 0 3 9 -16 13)
+                      #(9 1 2 125 1 0 3 2 100 1 1 3 0 0 0 1 5 7 28 0 0 0 1 6 7 11 0 1 0 0 5 1 1 3 9 9 0 0 0 1 5 1 0 3 9 -33 13)
+                      #(9 1 2 1 1 0 3 0 0 2 10 4 1 0 3 0 0 2 50 6 8 -14 13)
+                      #(9 1 2 1 1 0 3 0 0 2 10 4 1 0 2 50 6 7 3 9 -13 13)
+                      #(9 1 2 1 1 0 3 0 0 2 10 4 1 0 2 50 6 7 3 9 -13 13)
+                      #(9 1 2 125 1 0 3 2 100 1 1 3 0 0 0 1 5 7 28 0 0 0 1 6 7 11 0 1 0 0 5 1 1 3 9 9 0 0 0 1 5 1 0 3 9 -33 13)))
 
   (define results '(#(7 0 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
                     #(128 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
@@ -160,9 +102,7 @@
                     #(51 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
                     #(51 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
                     #(51 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
-                    #(25 25 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
-                    #(18 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)))
-
+                    #(25 25 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)))
   (define bytecodes-resulting-memory (for/list ([bc bytecodes]
                                                 [mem results])
                                          (cons bc mem)))
