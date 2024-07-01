@@ -7,6 +7,12 @@
 ;; ######################################## EXAMPLES ########################################
 
 
+(define (syntactical-analysis prg)
+  (c-lang-parser (lexical-analysis prg)))
+
+(provide code-gen create-env compile-tinyc)
+
+
 (define (make-counter)
   (let ([next 0])
     (lambda ()
@@ -78,11 +84,10 @@
 
   (define discarded-results1 (map run-ident-test test-data)))
 
-
-
 ;; ############################## code generator ##############################
 
 (define (map-identifier ident env)
+  (printf "Trying to find identifier: ~a in environment: ~a\n" ident env)
   (let ([num (assoc ident env)])
     (if (not num)
         (error 'map-identifier "identifier not found in environment id:= ~a | end:= ~a" ident env)
@@ -97,8 +102,6 @@
                  env)])
         result))
     (foldl assign-id empty idents)))
-
-
 
 
 (module+ test
@@ -121,7 +124,6 @@
 
 (define (source-absolute symbol)
   (cons 'absolute-source symbol))
-
 
 (define (enumerate-instrs list-of-instrs [pos 0])
   (cond
@@ -166,9 +168,7 @@
 
 
 (define (remove-target-labels list-of-instrs)
-  (filter (lambda (instr)
-            (not (and (list? instr) (eq? (first instr) 'target))))
-          list-of-instrs))
+  (filter (λ (instr) (match instr [`(target ,x ,y) #f] [_ #t])) list-of-instrs))
 
 
 
@@ -178,15 +178,14 @@
   (define resolve-front (resolve-offsets enum-instr))
   ;; symmetric case: when sources precede targets, resolve in backward direction...
   (define resolve-back  (resolve-offsets (reverse resolve-front)))
-  ;; need to reverse reversed representation, to obtain correct order again...
   ;; need to remove (target anchor placeholders at this point...)
   (remove-target-labels (reverse resolve-back)))
+
 
 
 (define memory-layout-counter (make-counter))
 
 (define (code-gen AST env)
-
   (define (recurse AST*)
     (code-gen AST* env))
 
@@ -202,42 +201,40 @@
     ; statement
     [(node 'IF2 cond then-branch else-branch v)
      `(,@(recurse cond)
-       'JZ 'else-label
+       'JZ 
        ,@(recurse then-branch)
-       'JMP 'end-label
-       'else-label
+       'JMP 
+       
        ,@(recurse else-branch)
-       'end-label)]
+       )]
 
-    [(node 'IF1 cond then-branch o3 v) `(,@(recurse cond) 'JZ 'end-label ,@(recurse then-branch) 'end-label)] ;if
+    [(node 'IF1 cond then-branch o3 v) `(,@(recurse cond) 'JZ  ,@(recurse then-branch) )] ;if
     
 
+    [(node 'WHILE cond body 'nil 'nil) `(,@(recurse cond) 'JZ 0 ,@(recurse body) 'JMP 0)] ;while
+    [(node 'DO body cond 'nil 'nil) `(,@(recurse body) ,@(recurse cond) 'JNZ 0)] ;do
 
-    [(node 'WHILE cond body 'nil 'nil) `(,@(recurse cond) (JZ) 0 ,@(recurse body) (JMP) 0 ,@(recurse AST))] ;while
-    [(node 'DO body cond 'nil 'nil) `(,@(recurse body) ,@(recurse cond) (JNZ) 0 ,@(recurse AST))] ;do
-
-    
     [(node 'EXPR expr 'nil 'nil 'nil) `(,@(recurse expr))]
     [(node 'EMPTY 'nil 'nil 'nil 'nil) empty]
 
     ; expr
-    [(node 'SET id expr 'nil 'nil) `(,@(recurse expr) (ISTORE) ,@(encode-operand id) (IPOP))]
+    [(node 'SET id expr 'nil 'nil) `(,@(recurse expr) 'ISTORE ,(encode-operand (node-val id)) 'IPOP)]
     
     ;test
-    [(node 'LT o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) (ILT))]
+    [(node 'LT o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) 'ILT)]
 
     ;sum
-    [(node 'ADD o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) (IADD))]
-    [(node 'SUB o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) (ISUB))]
+    [(node 'ADD o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) 'IADD)]
+    [(node 'SUB o1 o2 'nil 'nil) `(,@(recurse o1) ,@(recurse o2) 'ISUB)]
 
     ;term
-    [(node 'VAR 'nil 'nil 'nil v) `((IFETCH) ,@(encode-operand v))]
-    [(node 'CST 'nil 'nil 'nil v) `((IPUSH) ,v)]
+    [(node 'VAR 'nil 'nil 'nil v) `('IFETCH ,(encode-operand v))]
+    [(node 'CST 'nil 'nil 'nil v) `('IPUSH ,v)]
     
-   
-    [(? empty?)                     empty]
-    ['nil                           empty]
-    [_                              (error "no matching instruction for node: ~a" AST)]))
+    [(? empty?) empty]
+    ['nil empty]
+    [_ (error "no matching instruction for node: ~a" AST)]))
+
 
 
 (define (compile-tinyc AST)

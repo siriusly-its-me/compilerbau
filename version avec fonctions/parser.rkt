@@ -74,7 +74,9 @@
 
     ;; types
     [type [(INT) 'int]
-          [(FLOAT) 'float]]
+          [(FLOAT) 'float]
+          [(BYTE) 'byte]
+          [(SHORT 'short)]
 
     ;; Declarations
     [decls [(empty) (node 'DECLS-EMPTY 'nil 'nil 'nil 'nil)]

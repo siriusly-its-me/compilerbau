@@ -13,32 +13,36 @@
 
 ;; ######################################## LEXER ########################################
 
-(define-tokens basic-tokens (INT FLOAT ID))
-(define-empty-tokens punct-tokens (L-PAREN R-PAREN L-BRACKET R-BRACKET SEMI EOF))
+(define-tokens basic-tokens (INT FLOAT ID BYTE SHORT))
+(define-empty-tokens punct-tokens (L-PAREN R-PAREN L-BRACKET R-BRACKET SEMI COMMA EOF))
 (define-empty-tokens operator-tokens (PLUS MINUS LESS EQUAL))
-(define-empty-tokens keyword-tokens (WHILE DO IF ELSE))
+(define-empty-tokens keyword-tokens (WHILE DO IF ELSE RETURN))
 
 
 (define c-lang-lexer
-    (lexer-src-pos
-      [(eof) (token-EOF)]
-      ["("      (token-L-PAREN)]
-      [")"      (token-R-PAREN)]
-      ["{"      (token-L-BRACKET)]
-      ["}"      (token-R-BRACKET)]
-      [";"      (token-SEMI)]
-      ["+"      (token-PLUS)]
-      ["-"      (token-MINUS)]
-      ["<"      (token-LESS)]
-      ["="      (token-EQUAL)]
-      ["while"  (token-WHILE)]
-      ["do"     (token-DO)]
-      ["if"     (token-IF)]
-      ["else"   (token-ELSE)]
-      [(:+ numeric) (token-INT (string->number lexeme))]
-      [(:+ alphabetic) (token-ID lexeme)]
-      [(::(:+ numeric)#\.(:+ numeric)) (token-FLOAT (string->number lexeme))]
-      [whitespace (c-lang-lexer input-port)]))
+  (lexer-src-pos
+    [(eof) (token-EOF)]
+    ["("      (token-L-PAREN)]
+    [")"      (token-R-PAREN)]
+    ["{"      (token-L-BRACKET)]
+    ["}"      (token-R-BRACKET)]
+    [";"      (token-SEMI)]
+    [","      (token-COMMA)]
+    ["+"      (token-PLUS)]
+    ["-"      (token-MINUS)]
+    ["<"      (token-LESS)]
+    ["="      (token-EQUAL)]
+    ["while"  (token-WHILE)]
+    ["do"     (token-DO)]
+    ["if"     (token-IF)]
+    ["else"   (token-ELSE)]
+    ["return" (token-RETURN)]
+    [(:+ numeric) (token-INT (string->number lexeme))]
+    [(:+ alphabetic) (token-ID lexeme)]
+    [(:: (:? #\b "byte") (:+ numeric))(token-BYTE (string->number (substring lexeme 4)))] ;; Règle pour byte
+    [(:: (:? #\s "short") (:+ numeric))(token-SHORT (string->number (substring lexeme 5)))] ;; Règle pour short
+    [(::(:+ numeric)#\.(:+ numeric)) (token-FLOAT (string->number lexeme))]
+    [whitespace (c-lang-lexer input-port)]))
 
 (define (lexical-analysis prg)
   (let ([*in* (open-input-string prg)])
@@ -74,7 +78,8 @@
  (define e6 "{ ixl=1; while ((ixl=ixl+10)<50) ; }")
  (define e7 "{ bingo=125; bongo=100; while (bingo-bongo) if (bingo<bongo) bongo=bongo-bingo; else bingo=bingo-bongo; }")
  (define e8 "{ bingo = 3.14 ;}")
- (define programs (list e1 e2 e3 e4 e5 e6 e7 e8))
+ (define e9 "{ int addititon(int a, int b) { return a+b; } }")
+ (define programs (list e1 e2 e3 e4 e5 e6 e7 e8 e9))
 
  (define token-streams
    '((L-BRACKET
@@ -254,6 +259,24 @@
       EQUAL
       (FLOAT . 3.14)
       SEMI
+      R-BRACKET)
+      (L-BRACKET
+      (ID . "int")
+      (ID . "addititon")
+      L-PAREN
+      (ID . "int")
+      (ID . "a")
+      COMMA
+      (ID . "int")
+      (ID . "b")
+      R-PAREN
+      L-BRACKET
+      RETURN
+      (ID . "a")
+      PLUS
+      (ID . "b")
+      SEMI
+      R-BRACKET
       R-BRACKET)))
 
  (define programs-outputs (for/list ([p programs]

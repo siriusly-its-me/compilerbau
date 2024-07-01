@@ -13,7 +13,7 @@
 
 ;; ######################################## LEXER ########################################
 
-(define-tokens basic-tokens (INT FLOAT ID))
+(define-tokens basic-tokens (INT FLOAT ID BYTE SHORT))
 (define-empty-tokens punct-tokens (L-PAREN R-PAREN L-BRACKET R-BRACKET SEMI COMMA EOF))
 (define-empty-tokens operator-tokens (PLUS MINUS LESS EQUAL))
 (define-empty-tokens keyword-tokens (WHILE DO IF ELSE RETURN))
@@ -39,6 +39,8 @@
     ["return" (token-RETURN)]
     [(:+ numeric) (token-INT (string->number lexeme))]
     [(:+ alphabetic) (token-ID lexeme)]
+    [(:: (:? #\b "byte") (:+ numeric))(token-BYTE (string->number (substring lexeme 4)))] ;; Règle pour byte
+    [(:: (:? #\s "short") (:+ numeric))(token-SHORT (string->number (substring lexeme 5)))] ;; Règle pour short
     [(::(:+ numeric)#\.(:+ numeric)) (token-FLOAT (string->number lexeme))]
     [whitespace (c-lang-lexer input-port)]))
 

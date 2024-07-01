@@ -19,48 +19,73 @@
    [tokens basic-tokens punct-tokens operator-tokens keyword-tokens]
    (src-pos)
    [grammar
-    [program [(sequence) (node 'PROG $1 'nil 'nil 'nil)]] ; <program> ::= <sequence>
+    ;; Top-level program
+    [program [(sequence) (node 'PROG $1 'nil 'nil 'nil)]]
 
-    [sequence [(statement) (node 'SEQ $1 'nil 'nil 'nil)] ; <sequence> ::= <statement>
-              [(statement sequence) (node 'SEQ $1 $2 'nil 'nil)]] ; <sequence> ::= <statement> <sequence>
+    ;; Sequence of statements
+    [sequence [(statement) (node 'SEQ $1 'nil 'nil 'nil)]
+              [(statement sequence) (node 'SEQ $1 $2 'nil 'nil)]]
 
-    [statement [(IF paren-expr statement ELSE statement)(node 'IF2 $2 $3 $5 'nil)]  ; "if" paren-expr-if1 <statement> "else" <statement>
-               [(IF paren-expr statement)(node 'IF1 $2 $3 'nil 'nil)] ; "if" paren-expr-if1 <statement>
-               [(WHILE paren-expr statement)(node 'WHILE $2 $3 'nil 'nil)]; "while" <paren_expr> <statement>
-               [(DO statement WHILE paren-expr SEMI)(node 'DO $2 $4 'nil 'nil)] ; "do" <statement> "while" <paren_expr> ";"
-               [(L-BRACKET sequence R-BRACKET) $2] ; return the sequence inside the braces
-               [(expr SEMI) (node 'EXPR $1 'nil 'nil 'nil)] ; <expr> ";"
-               [(SEMI) (node 'EMPTY 'nil 'nil 'nil 'nil)]] ; ";"
+    ;; Statement including function definitions
+    [statement [(IF paren-expr statement ELSE statement) (node 'IF2 $2 $3 $5 'nil)]
+               [(IF paren-expr statement) (node 'IF1 $2 $3 'nil 'nil)]
+               [(WHILE paren-expr statement) (node 'WHILE $2 $3 'nil 'nil)]
+               [(DO statement WHILE paren-expr SEMI) (node 'DO $2 $4 'nil 'nil)]
+               [(L-BRACKET sequence R-BRACKET) $2]
+               [(expr SEMI) (node 'EXPR $1 'nil 'nil 'nil)]
+               [(SEMI) (node 'EMPTY 'nil 'nil 'nil 'nil)]
+               [(type id L-PAREN fparams-e R-PAREN L-BRACKET statements-e R-BRACKET) (node 'FUNC $7 $2 $4 $7 'nil)]]
 
-    [paren-expr-if1 [(L-PAREN id LESS int R-PAREN) (node 'LT (node 'VAR 'nil 'nil 'nil $2) (node 'CST 'nil 'nil 'nil $4) 'nil 'nil)]]; IF1: Comparaison entre VAR et CST
+    ;; Parameters and return statements
+    [fparams-e [(type id SEMI fparams-e) (node 'FPARAMS $1 $2 $4 'nil)]
+               [(empty) (node 'FPARAMS-EMPTY 'nil 'nil 'nil 'nil)]]
+    
+    [statements-e [(statement) $1]
+                  [(RETURN expr SEMI) (node 'RETURN $2 'nil 'nil 'nil)]]
+    
+    ;; Parenthesized expression
+    [paren-expr [(L-PAREN expr R-PAREN) $2]]
 
-    [paren-expr-if2 [(L-PAREN id LESS id R-PAREN) (node 'LT (node 'VAR 'nil 'nil 'nil $2) (node 'VAR 'nil 'nil 'nil $4) 'nil 'nil)]] ; IF2: Comparaison entre VAR et VAR
+    ;; Expressions including function calls
+    [expr [(test) $1]
+          [(term EQUAL expr) (node 'SET $1 $3 'nil 'nil)]
+          [(id L-PAREN aparams R-PAREN) (node 'CALL $1 $3 'nil 'nil)]]
 
-    [paren-expr [(L-PAREN expr R-PAREN) $2]] ; <paren_expr> ::= "(" <expr> ")"
+    ;; Arguments in function calls
+    [aparams [(expr SEMI expr) (node 'APARAMS $1 $3 'nil 'nil)]
+             [(empty) (node 'APARAMS-EMPTY 'nil 'nil 'nil 'nil)]]
 
-    [expr [(test) $1] ; <expr> ::= <test>
-          [(term EQUAL expr) ; <id> "=" <expr>
-           (node 'SET $1 $3 'nil 'nil)]]
+    ;; Tests and operations
+    [test [(sum) $1]
+          [(sum LESS sum) (node 'LT $1 $3 'nil 'nil)]]
 
-    [test [(sum) $1] ; <test> ::= <sum>
-          [(sum LESS sum) ; <sum> "<" <sum>
-           (node 'LT $1 $3 'nil 'nil)]]
+    [sum [(term) $1]
+         [(sum PLUS term) (node 'ADD $1 $3 'nil 'nil)]
+         [(sum MINUS term) (node 'SUB $1 $3 'nil 'nil)]]
 
-    [sum [(term) $1] ; <sum> ::= <term>
-         [(sum PLUS term) ; <sum> "+" <term>
-          (node 'ADD $1 $3 'nil 'nil)]
-         [(sum MINUS term) ; <sum> "-" <term>
-          (node 'SUB $1 $3 'nil 'nil)]]
+    [term [(id) (node 'VAR 'nil 'nil 'nil $1)]
+          [(int) (node 'CST 'nil 'nil 'nil $1)]
+          [(paren-expr) $1]]
 
-    [term [(id) (node 'VAR 'nil 'nil 'nil $1)] ; <term> ::= <id>
-          [(int) (node 'CST 'nil 'nil 'nil $1)] ; <term> ::= <int>
-          [(paren-expr) $1]] ; <term> ::= <paren_expr>
+    ;; Identifiers and integers
+    [id [(ID) $1]]
 
-    [id [(ID) $1]] ; <id> ::= identifiant (par exemple "a", "b", "c" ou autre identifiant)
+    [int [(INT) $1]]
 
-    [int [(INT) $1]] ; <int> ::= nombre entier
-  ]))
- ; <int> ::= <an_unsigned_decimal_integer>
+    ;; types
+    [type [(INT) 'int]
+          [(FLOAT) 'float]
+          [(BYTE) 'byte]
+          [(SHORT 'short)]
+
+    ;; Declarations
+    [decls [(empty) (node 'DECLS-EMPTY 'nil 'nil 'nil 'nil)]
+           ;; Add rules for variable declarations if needed
+           ]
+
+    ;; Empty production
+  
+      [empty [(empty)(node 'EMPTY 'nil 'nil 'nil 'nil)]]]]))
     
                   
 (define (syntactical-analysis prg)
@@ -77,7 +102,8 @@
   (define e5 "{ i=1; while ((i=i+10)<50) ; }")
   (define e6 "{ ixl=1; while ((ixl=ixl+10)<50) ; }") ; same but longer identifiers
   (define e7 "{ bingo=125; bongo=100; while (bingo-bongo) if (bingo<bongo) bongo=bongo-bingo; else bingo=bingo-bongo; }")
-  (define programs (list e1 e2 e3 e4 e5 e6 e7))
+  (define e8 "{ int addition(int a, int b) { return a+b; } }")
+  (define programs (list e1 e2 e3 e4 e5 e6 e7 e8))
   (define asts
            (list
             (node
@@ -336,7 +362,33 @@
               'nil)
              'nil
              'nil
-             'nil)))
+             'nil)
+             (node
+              'PROG
+              (node
+               'SEQ
+               (node
+                'SEQ
+                (node
+                 'FUNC
+                 (node 'INT 'nil 'nil 'nil 'nil)
+                 (node 'ID 'nil 'nil 'nil "addition")                 
+                 (node 'FPARAMS (node 'FPARAMS (node 'FPARAMS-EMPTY 'nil 'nil 'nil 'nil) (node 'ID 'nil 'nil 'nil "a") (node 'ID 'nil 'nil 'nil "b") 'nil) 'nil 'nil 'nil)
+                 (node
+                  'SEQ
+                  (node 'RETURN (node 'ADD (node 'VAR 'nil 'nil 'nil "a") (node 'VAR 'nil 'nil 'nil "b") 'nil 'nil) 'nil 'nil 'nil)
+                  'nil
+                  'nil
+                  'nil))
+                'nil
+                'nil
+                'nil)
+               'nil
+               'nil
+               'nil)
+              'nil
+              'nil
+              'nil)))
 
  (define programs-ASTs (for/list ([p programs]
                                   [t asts])
